@@ -1,7 +1,8 @@
+import * as THREE from 'three'
 const vertexShader = require('webpack-glsl-loader!./shader/vertexShader.vert');
 const fragmentShader = require('webpack-glsl-loader!./shader/fragmentShader.frag');
 
-let renderer, scene, geometry;
+let canvas, renderer, scene, geometry;
 const index = [];
 const vertices = [];
 const uvs = [];
@@ -622,87 +623,110 @@ let isPointerActive = false
 const FORCE_RADIUS = 800
 const POINTER_FORCE = 400
 
-// options
-kumaleon.options = {
-    onInit: () => {
-        camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 4)
-        camera.position.z = 2
-        camera.lookAt(0, 0, 0)
-        camera.matrixAutoUpdate = false
+const init = () => {
+    camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 4)
+    camera.position.z = 2
+    camera.lookAt(0, 0, 0)
+    camera.matrixAutoUpdate = false
 
-        clock = new THREE.Clock()
+    clock = new THREE.Clock()
 
-        createTiles()
+    createTiles()
 
-        const canvas = renderer.domElement
-        document.querySelector('.js-main').appendChild(canvas)
+    canvas = renderer.domElement
+    document.querySelector('.js-main').appendChild(canvas)
 
-        pointerPos = new THREE.Vector2()
-        window.addEventListener('pointermove', (e) => {
-            pointerPos.x = e.clientX
-            pointerPos.y = e.clientY
-            isPointerActive = true
+    pointerPos = new THREE.Vector2()
+    window.addEventListener('pointermove', (e) => {
+        pointerPos.x = e.clientX
+        pointerPos.y = e.clientY
+        isPointerActive = true
+    })
+}
+
+const update = () => {
+    uniforms.pointerPos.value.x = pointerPos.x * pixelRatio
+    uniforms.pointerPos.value.y = pointerPos.y * pixelRatio
+
+    if (isPointerActive) {
+        uniforms.pointerForceFactor.value += (1 - uniforms.pointerForceFactor.value) * 0.1
+    }
+    const time = clock.getElapsedTime()
+    uniforms.time.value = time
+    currentTime[0] = time;
+    uniforms.forceRadius.value = FORCE_RADIUS * pixelRatio
+    uniforms.pointerForce.value = POINTER_FORCE * pixelRatio
+
+    if (baseTile && attr.dynamic) {
+        baseTile.update();
+
+        const sec = Math.floor(currentTime[0]);
+        if (sec === 0 || sec !== lastUpdatedTime && sec % 10 === 0) {
+            baseTile.updateTarget(0.5);
+            lastUpdatedTime = sec;
+        }
+    }
+
+    renderer.render(scene, camera)
+}
+
+const resize = () => {
+    pixelRatio = Math.min(2, window.devicePixelRatio)
+
+    // called when window resized
+    const w = window.innerWidth
+    const h = window.innerHeight
+    const halfW = w * 0.5
+    const halfH = h * 0.5
+
+    camera.left = -halfW
+    camera.right = halfW
+    camera.top = halfH
+    camera.bottom = -halfH
+    camera.updateProjectionMatrix()
+
+    uniforms.resolution.value.x = w * pixelRatio
+    uniforms.resolution.value.y = h * pixelRatio
+
+    renderer.setPixelRatio(pixelRatio)
+    renderer.setSize(w, h)
+
+    if (baseTile) {
+        baseTile.resize({
+            x: -window.innerWidth / 2,
+            y: -window.innerHeight / 2,
+            w: window.innerWidth,
+            h: window.innerHeight
         })
+    }
+}
 
-        // pass a canvas element.
-        // If the canvas is not square, the center will be cropped.
-        kumaleon.setCanvas(canvas)
-    },
+if (window.kumaleon) {
+    // with kumaleon
+    kumaleon.options = {
+        onInit: () => {
+            init()
+            // pass a canvas element.
+            // If the canvas is not square, the center will be cropped.
+            kumaleon.setCanvas(canvas)
+        },
 
-    onUpdate: () => {
-        uniforms.pointerPos.value.x = pointerPos.x * pixelRatio
-        uniforms.pointerPos.value.y = pointerPos.y * pixelRatio
+        onUpdate: () => {
+            update()
+        },
 
-        if (isPointerActive) {
-            uniforms.pointerForceFactor.value += (1 - uniforms.pointerForceFactor.value) * 0.1
-        }
-        const time = clock.getElapsedTime()
-        uniforms.time.value = time
-        currentTime[0] = time;
-        uniforms.forceRadius.value = FORCE_RADIUS * pixelRatio
-        uniforms.pointerForce.value = POINTER_FORCE * pixelRatio
-
-        if (baseTile && attr.dynamic) {
-            baseTile.update();
-
-            const sec = Math.floor(currentTime[0]);
-            if (sec === 0 || sec !== lastUpdatedTime && sec % 10 === 0) {
-                baseTile.updateTarget(0.5);
-                lastUpdatedTime = sec;
-            }
-        }
-
-        renderer.render(scene, camera)
-    },
-
-    onResize: () => {
-        pixelRatio = Math.min(2, window.devicePixelRatio)
-
-        // called when window resized
-        const w = window.innerWidth
-        const h = window.innerHeight
-        const halfW = w * 0.5
-        const halfH = h * 0.5
-
-        camera.left = -halfW
-        camera.right = halfW
-        camera.top = halfH
-        camera.bottom = -halfH
-        camera.updateProjectionMatrix()
-
-        uniforms.resolution.value.x = w * pixelRatio
-        uniforms.resolution.value.y = h * pixelRatio
-
-        renderer.setPixelRatio(pixelRatio)
-        renderer.setSize(w, h)
-
-        if (baseTile) {
-            baseTile.resize({
-                x: -window.innerWidth / 2,
-                y: -window.innerHeight / 2,
-                w: window.innerWidth,
-                h: window.innerHeight
-            })
-        }
-    },
+        onResize: () => {
+            resize()
+        },
+    }
+} else {
+    // without kumaleon
+    init()
+    resize()
+    window.addEventListener("resize", resize)
+    const render = () => {
+        update()
+        requestAnimationFrame(render)
+    }
+    render()
 }

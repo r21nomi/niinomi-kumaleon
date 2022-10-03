@@ -314,7 +314,7 @@ class Tile {
         this.age = age;
         this.children = [];
         this.offset = Math.floor(Math.random() * 50 + 1);
-        this.ratio = 0.5 + (Math.random() * 2.0 - 1.0) * attr.tileRatioOffset;
+        this.ratio = 0.5 + (random.random_dec() * 2.0 - 1.0) * attr.tileRatioOffset;
         this.targetRatio = this.ratio;
         this.shouldRender = false;
         this.id = -1;
